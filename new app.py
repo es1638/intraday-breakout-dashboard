@@ -30,7 +30,7 @@ def run_daily_screen():
             recent_high = hist['High'].max()
             days_within = (hist['High'].idxmax() - hist.index[-1]).days
 
-            if beta > 0.65 and close >= 0.95 * recent_high and abs(days_within) <= 60:
+            if beta > 0.5 and close >= 0.8 * recent_high and abs(days_within) <= 60:
                 selected.append(ticker)
         except:
             continue
