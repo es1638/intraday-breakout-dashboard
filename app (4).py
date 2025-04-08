@@ -8,7 +8,7 @@ from datetime import datetime
 # Auto-refresh every 2 minutes
 if "last_ran" not in st.session_state or time.time() - st.session_state.last_ran > 120:
     st.session_state.last_ran = time.time()
-    st.experimental_rerun()
+    st.rerun()
 
 st.set_page_config(layout="wide")
 st.title("📉 Intraday Breakout Prediction Dashboard")
