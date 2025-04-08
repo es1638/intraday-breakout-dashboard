@@ -4,60 +4,76 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import joblib
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
+import lightgbm as lgb
 
 st.set_page_config(layout="wide")
-st.title("📈 Intraday Breakout Prediction Dashboard")
+st.title("📉 Intraday Breakout Prediction Dashboard")
 
-# Load model
+# Load the trained LightGBM model
 model = joblib.load("lightgbm_model_converted.pkl")
 
-# Load screener data
-try:
-    screener_df = pd.read_csv("intraday_with_premarket_features.csv")
-except Exception as e:
-    st.error(f"Could not load screener file: {e}")
-    st.stop()
+# Buy signal threshold
+threshold = st.slider("Buy Signal Threshold", min_value=0.90, max_value=1.00, step=0.01, value=0.98)
 
-# Apply predefined conditions
-filtered_df = screener_df[
-    (screener_df['avg_volume'] > 10_000_000) &
-    (screener_df['beta'] > 1) &
-    (screener_df['days_since_52wk_high'] <= 10)
-]
+# Screener conditions
+def run_screener():
+    sp500 = pd.read_csv("https://datahub.io/core/s-and-p-500-companies/r/constituents.csv")
+    tickers = sp500["Symbol"].tolist()
+    selected = []
+    for ticker in tickers:
+        try:
+            data = yf.Ticker(ticker).info
+            hist = yf.download(ticker, period="20d")
+            if (
+                data.get("averageDailyVolume10Day", 0) > 10_000_000
+                and data.get("beta", 0) > 1
+                and len(hist) >= 10
+                and hist["High"].max() == hist["High"][-10:].max()
+            ):
+                selected.append(ticker)
+        except:
+            continue
+    return selected
 
-tickers = filtered_df['ticker'].unique().tolist()
-
-# Feature generator
-def get_live_features(ticker: str) -> pd.Series:
-    data = yf.download(ticker, period="2d", interval="1m", progress=False)
-    if data.empty or len(data) < 10:
-        raise ValueError("Not enough data for intraday features")
+# Get live features
+def get_live_features(ticker):
+    data = yf.download(ticker, period="2d", interval="1m")
     data.index = pd.to_datetime(data.index)
-    volume_series = data["Volume"]
+    volume_series = data["Volume"].iloc[:, 0] if isinstance(data["Volume"], pd.DataFrame) else data["Volume"]
     data["momentum_10min"] = data["Close"].pct_change(periods=10)
     data["price_change_5min"] = data["Close"].pct_change(periods=5)
-    data["rolling_volume"] = volume_series.rolling(window=10).mean()
+    data["rolling_volume"] = volume_series.rolling(window=5).mean()
     data["rolling_volume_ratio"] = volume_series / data["rolling_volume"]
     features = data[["momentum_10min", "price_change_5min", "rolling_volume_ratio"]].dropna()
-    if features.empty:
-        raise ValueError("No valid features")
-    return features.iloc[-1]
+    return features.iloc[[-1]] if not features.empty else None
 
-# Slider for threshold
-threshold = st.slider("Buy Signal Threshold", 0.90, 1.00, 0.9761, step=0.0001)
-
-# Evaluation loop
-st.subheader("Evaluating Live Buy Signals")
-results = []
-for ticker in tickers:
-    try:
+# Run predictions
+def evaluate_stocks(tickers):
+    results = []
+    for ticker in tickers:
         features = get_live_features(ticker)
-        X = features.values.reshape(1, -1)
-        prob = model.predict_proba(X)[0][1]
-        signal = "✅ Buy" if prob >= threshold else "❌ Hold"
-        results.append({"Ticker": ticker, "Buy Signal": signal, "Probability": round(prob, 4)})
-    except Exception as e:
-        results.append({"Ticker": ticker, "Buy Signal": "⚠️ Error", "Probability": str(e)})
+        if features is None:
+            results.append({"Ticker": ticker, "Buy Signal": "⚠️ Error", "Probability": "No features"})
+            continue
+        try:
+            prob = model.predict(features)[0]
+            signal = "✅ Buy" if prob >= threshold else "❌ No"
+            results.append({"Ticker": ticker, "Buy Signal": signal, "Probability": round(prob, 4)})
+        except Exception as e:
+            results.append({"Ticker": ticker, "Buy Signal": "⚠️ Error", "Probability": str(e)})
+    return pd.DataFrame(results)
 
-st.dataframe(pd.DataFrame(results))
+# Screen tickers and cache for 2 minutes
+@st.cache_data(ttl=120)
+def get_screened_tickers():
+    return run_screener()
+
+screened_tickers = get_screened_tickers()
+st.subheader(f"Evaluating {len(screened_tickers)} Screened Stocks")
+
+if st.button("🔍 Evaluate"):
+    output = evaluate_stocks(screened_tickers)
+    st.dataframe(output, use_container_width=True)
+
