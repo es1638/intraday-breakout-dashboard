@@ -17,9 +17,24 @@ model = joblib.load("lightgbm_model_converted.pkl")
 # Daily screening conditions
 def passes_screening(ticker):
     try:
-        hist = yf.download(ticker, period="90d", interval="1d")
+        hist = yf.download(ticker, period="1y", interval="1d")
         if hist.empty or "Close" not in hist.columns or "Volume" not in hist.columns:
             return False
+
+        avg_volume = hist["Volume"].tail(30).mean()
+        if avg_volume < 10_000_000:
+            return False
+
+        high_52w = hist["High"].rolling(window=252).max().iloc[-1]
+        current_price = hist["Close"].iloc[-1]
+
+        if np.isnan(high_52w) or current_price < 0.6 * high_52w:
+            return False
+
+        return True
+    except Exception as e:
+        st.warning(f"⚠️ Error with {ticker}: {e}")
+        return False
 
         # Calculate average volume over the last 30 trading days
         avg_volume = hist["Volume"].tail(30).mean()
@@ -105,4 +120,5 @@ if st.session_state.screened_tickers:
     st.dataframe(df_results)
 else:
     st.info("Please run the daily screen to populate tickers.")
+
 
