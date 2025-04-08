@@ -36,11 +36,17 @@ def passes_screening(ticker):
         current_price = info.get("regularMarketPrice")
         high_52w = info.get("fiftyTwoWeekHigh")
 
-        try:
-            current_price = float(np.atleast_1d(current_price)[0])
-            high_52w = float(np.atleast_1d(high_52w)[0])
-        except Exception:
+        if current_price is None or high_52w is None:
             return False
+
+        # Ensure values are scalar floats
+        if isinstance(current_price, pd.Series):
+            current_price = current_price.iloc[0]
+        if isinstance(high_52w, pd.Series):
+            high_52w = high_52w.iloc[0]
+
+        current_price = float(current_price)
+        high_52w = float(high_52w)
 
         if current_price < 0.4 * high_52w:
             return False
@@ -118,4 +124,5 @@ if st.session_state.screened_tickers:
     st.dataframe(df_results)
 else:
     st.info("Please run the daily screen to populate tickers.")
+
 
