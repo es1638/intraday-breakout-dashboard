@@ -1,109 +1,46 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import yfinance as yf
 import lightgbm as lgb
-import time
+import yfinance as yf
 from datetime import datetime
 
-# Password Protection
-def login():
-    st.title("🔐 Secure Access")
-    password = st.text_input("Enter password to access the dashboard:", type="password")
-    if password != "my_secret":
-        st.warning("Incorrect password")
-        st.stop()
+# Load trained LightGBM model
+model = lgb.Booster(model_file="lightgbm_model.txt")
+BUY_SIGNAL_THRESHOLD = 0.9761
 
-login()
+def get_live_features(ticker: str) -> pd.Series:
+    data = yf.download(ticker, period="2d", interval="1m", progress=False)
+    data.index = pd.to_datetime(data.index)
+    volume_series = data["Volume"].iloc[:, 0] if isinstance(data["Volume"], pd.DataFrame) else data["Volume"]
+    data["momentum_10min"] = data["Close"].pct_change(periods=10)
+    data["price_change_5min"] = data["Close"].pct_change(periods=5)
+    data["rolling_volume"] = volume_series.rolling(window=10).mean()
+    data["rolling_volume_ratio"] = volume_series / data["rolling_volume"]
+    features = data[["momentum_10min", "price_change_5min", "rolling_volume_ratio"]].dropna()
+    if features.empty:
+        raise ValueError("Not enough data to compute features for " + ticker)
+    return features.iloc[-1]
 
-# Feature list used in your model
-FEATURES = [
-    'premarket_change', 'open_vs_premarket', 'volume_spike_ratio',
-    'price_change_5min', 'momentum_10min', 'rolling_volume_ratio', 'above_vwap'
-]
+def generate_buy_signal(ticker: str, model, threshold: float = BUY_SIGNAL_THRESHOLD):
+    features = get_live_features(ticker)
+    X = features.values.reshape(1, -1)
+    prob = model.predict(X)[0]
+    signal = prob >= threshold
+    return signal, prob, features
 
-# Load pre-trained LightGBM model
-@st.cache_resource
-def load_model():
-    model = lgb.Booster(model_file='lightgbm_model.txt')
-    return model
+# Streamlit app
+st.title("📈 Intraday Breakout Dashboard")
+ticker_input = st.text_input("Enter stock ticker:", "AAPL")
 
-model = load_model()
-
-# Function to fetch current intraday data
-def get_live_data(ticker):
-    stock = yf.Ticker(ticker)
-    data = stock.history(interval="1m", period="1d", prepost=False)
-    return data
-
-# Feature engineering (must match training logic)
-def engineer_features(data, static_row):
-    data = data.copy()
-    data['price_change_5min'] = data['Close'].pct_change(periods=5)
-    data['momentum_10min'] = data['Close'].pct_change(periods=10)
-    data['rolling_volume'] = data['Volume'].rolling(10).mean()
-    data['rolling_volume_ratio'] = data['Volume'] / data['rolling_volume']
-    data['vwap'] = (data['Close'] * data['Volume']).cumsum() / data['Volume'].cumsum()
-    data['above_vwap'] = (data['Close'] > data['vwap']).astype(int)
-
-    # Inject static premarket features
-    data['premarket_change'] = static_row['premarket_change']
-    data['open_vs_premarket'] = static_row['open_vs_premarket']
-    data['volume_spike_ratio'] = static_row['volume_spike_ratio']
-
-    return data
-
-# UI Layout
-st.set_page_config(layout="wide")
-st.title("🚨 Intraday Breakout Prediction Dashboard")
-
-# Input ticker list
-st.sidebar.header("Settings")
-ticker_input = st.sidebar.text_input("Tickers (comma-separated)", "AAPL,AMD,NVDA")
-tickers = [t.strip().upper() for t in ticker_input.split(",") if t.strip()]
-
-# Mock static context (you can replace with real file or DB lookup)
-@st.cache_data
-def get_mock_static(ticker):
-    return {
-        'premarket_change': np.random.uniform(-0.02, 0.05),
-        'open_vs_premarket': np.random.uniform(-0.01, 0.03),
-        'volume_spike_ratio': np.random.uniform(0.8, 2.5)
-    }
-
-# Threshold from your analysis
-THRESHOLD = 0.9761
-
-# Live predictions
-results = []
-for ticker in tickers:
+if st.button("Check Buy Signal"):
     try:
-        live_data = get_live_data(ticker)
-        static_row = get_mock_static(ticker)
-        features_df = engineer_features(live_data, static_row)
-        latest = features_df.dropna().tail(1)
-        if latest.empty:
-            continue
-        X_live = latest[FEATURES]
-        prob = model.predict(X_live)[0]
-        results.append({
-            'Ticker': ticker,
-            'Time': datetime.now().strftime("%H:%M:%S"),
-            'Breakout Probability': round(prob, 4),
-            'Signal': "✅ BUY" if prob >= THRESHOLD else ""
-        })
+        signal, prob, features = generate_buy_signal(ticker_input.upper(), model)
+        st.metric("Buy Signal Probability", f"{prob:.4f}")
+        st.write("Live Features:", features)
+        if signal:
+            st.success("✅ Buy Signal Triggered!")
+        else:
+            st.info("ℹ️ No Buy Signal Yet.")
     except Exception as e:
-        results.append({
-            'Ticker': ticker,
-            'Time': datetime.now().strftime("%H:%M:%S"),
-            'Breakout Probability': 'Error',
-            'Signal': f"Error: {str(e)}"
-        })
-
-# Display results
-df_results = pd.DataFrame(results)
-st.dataframe(df_results, use_container_width=True)
-
-# Auto-refresh every 45 seconds
-st.experimental_rerun()
-time.sleep(45)
+        st.error(f"Error: {e}")
