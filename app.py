@@ -14,8 +14,8 @@ model = joblib.load("lightgbm_model_converted.pkl")
 
 # Screener parameters
 MIN_AVG_VOLUME = 10_000_000
-MIN_BETA = 0.65  # adjusted from 1 to 0.65
-DAYS_WITHIN_52WEEK_HIGH = 15  # slightly more grace
+MIN_BETA = 0.3  # adjusted from 1 to 0.65
+DAYS_WITHIN_52WEEK_HIGH = 30  # slightly more grace
 
 @st.cache_data(ttl=120)
 def get_screened_stocks():
