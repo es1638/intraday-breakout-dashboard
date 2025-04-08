@@ -35,7 +35,9 @@ def passes_screening(ticker):
         # 52-week high proximity condition (within 60%)
         current_price = info.get("regularMarketPrice")
         high_52w = info.get("fiftyTwoWeekHigh")
-        if current_price is None or high_52w is None or float(current_price) < 0.4 * float(high_52w):
+        if current_price is None or high_52w is None:
+            return False
+        if float(current_price) < 0.4 * float(high_52w):
             return False
 
         return True
@@ -98,7 +100,7 @@ if st.session_state.screened_tickers:
             results.append({
                 "Ticker": ticker,
                 "Buy Signal": "✅ Buy" if prob >= threshold else "❌ No",
-                "Probability": round(prob, 4)
+                "Probability": round(float(prob), 4)
             })
         except Exception as e:
             results.append({
