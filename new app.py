@@ -21,7 +21,7 @@ def passes_screening(ticker):
 
         # Historical volume check (last 30 days average)
         hist = yf.download(ticker, period="30d", interval="1d")
-        if hist.empty or 'Volume' not in hist:
+        if hist.empty or 'Volume' not in hist.columns:
             return False
         avg_volume = hist['Volume'].mean()
         if avg_volume < 10_000_000:
@@ -35,7 +35,7 @@ def passes_screening(ticker):
         # 52-week high proximity condition (within 60%)
         current_price = info.get("regularMarketPrice")
         high_52w = info.get("fiftyTwoWeekHigh")
-        if current_price is None or high_52w is None or current_price < 0.4 * high_52w:
+        if current_price is None or high_52w is None or float(current_price) < 0.4 * float(high_52w):
             return False
 
         return True
@@ -60,8 +60,10 @@ def get_screened_tickers():
 # Live feature engineering
 def get_live_features(ticker):
     data = yf.download(ticker, period="2d", interval="1m")
+    if data.empty:
+        raise ValueError("No intraday data available")
     data.index = pd.to_datetime(data.index)
-    volume_series = data["Volume"].iloc[:, 0] if isinstance(data["Volume"], pd.DataFrame) else data["Volume"]
+    volume_series = data["Volume"]
     data["momentum_10min"] = data["Close"].pct_change(periods=10)
     data["price_change_5min"] = data["Close"].pct_change(periods=5)
     data["rolling_volume"] = volume_series.rolling(window=5).mean()
@@ -89,7 +91,10 @@ if st.session_state.screened_tickers:
             X = get_live_features(ticker)
             if X.empty:
                 raise ValueError("No intraday data available")
-            prob = model.predict_proba(X)[0][1] if hasattr(model, "predict_proba") else model.predict(X)[0]
+            if hasattr(model, "predict_proba"):
+                prob = model.predict_proba(X)[0][1]
+            else:
+                prob = model.predict(X)[0]
             results.append({
                 "Ticker": ticker,
                 "Buy Signal": "✅ Buy" if prob >= threshold else "❌ No",
