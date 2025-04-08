@@ -4,3 +4,4 @@ numpy
 yfinance
 lightgbm
 joblib
+lxml
