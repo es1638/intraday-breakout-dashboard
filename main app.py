@@ -101,15 +101,12 @@ if st.session_state.screened_tickers:
 
             # Check if model has predict_proba (e.g., classification model)
             # Otherwise use predict() directly (e.g., regression model)
-            if hasattr(model, "predict_proba"):
-                prob = model.predict_proba(X)[0][1]  # Class 1 probability
-            else:
-                prob = model.predict(X).item()       # Regression prediction
+            prob = model.predict(X).item()       # Regression prediction
 
             results.append({
                 "Ticker": ticker,
                 "Buy Signal": "✅ Buy" if prob >= threshold else "❌ No",
-                "Probability": round(float(prob), 4)
+                "Probability": "N/A"
             })
         except Exception as e:
             results.append({
@@ -122,3 +119,4 @@ if st.session_state.screened_tickers:
     st.dataframe(df_results)
 else:
     st.info("Please run the daily screen to populate tickers.")
+
