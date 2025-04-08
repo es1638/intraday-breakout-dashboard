@@ -35,13 +35,13 @@ def passes_screening(ticker):
         # 52-week high proximity condition (within 60%)
         current_price = info.get("regularMarketPrice")
         high_52w = info.get("fiftyTwoWeekHigh")
-        if current_price is None or high_52w is None:
-            return False
+
         try:
-            current_price = float(current_price)
-            high_52w = float(high_52w)
+            current_price = float(np.atleast_1d(current_price)[0])
+            high_52w = float(np.atleast_1d(high_52w)[0])
         except Exception:
             return False
+
         if current_price < 0.4 * high_52w:
             return False
 
@@ -82,7 +82,7 @@ def get_live_features(ticker):
 if "screened_tickers" not in st.session_state:
     st.session_state.screened_tickers = []
 
-if st.button("🤁 Refresh Daily Screen"):
+if st.button("🦁 Refresh Daily Screen"):
     with st.spinner("Running daily screener..."):
         st.session_state.screened_tickers = get_screened_tickers()
         st.success(f"Screened {len(st.session_state.screened_tickers)} tickers.")
@@ -118,3 +118,4 @@ if st.session_state.screened_tickers:
     st.dataframe(df_results)
 else:
     st.info("Please run the daily screen to populate tickers.")
+
