@@ -94,9 +94,9 @@ if st.session_state.screened_tickers:
             if X.empty:
                 raise ValueError("No intraday data available")
             if hasattr(model, "predict_proba"):
-                prob = model.predict_proba(X)[0][1]
+                prob = model.predict_proba(X).item(1)
             else:
-                prob = model.predict(X)[0]
+                prob = model.predict(X).item()
             results.append({
                 "Ticker": ticker,
                 "Buy Signal": "✅ Buy" if prob >= threshold else "❌ No",
@@ -113,4 +113,3 @@ if st.session_state.screened_tickers:
     st.dataframe(df_results)
 else:
     st.info("Please run the daily screen to populate tickers.")
-
