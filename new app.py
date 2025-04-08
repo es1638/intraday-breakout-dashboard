@@ -37,7 +37,12 @@ def passes_screening(ticker):
         high_52w = info.get("fiftyTwoWeekHigh")
         if current_price is None or high_52w is None:
             return False
-        if float(current_price) < 0.4 * float(high_52w):
+        try:
+            current_price = float(current_price)
+            high_52w = float(high_52w)
+        except Exception:
+            return False
+        if current_price < 0.4 * high_52w:
             return False
 
         return True
@@ -77,7 +82,7 @@ def get_live_features(ticker):
 if "screened_tickers" not in st.session_state:
     st.session_state.screened_tickers = []
 
-if st.button("🔁 Refresh Daily Screen"):
+if st.button("🤁 Refresh Daily Screen"):
     with st.spinner("Running daily screener..."):
         st.session_state.screened_tickers = get_screened_tickers()
         st.success(f"Screened {len(st.session_state.screened_tickers)} tickers.")
