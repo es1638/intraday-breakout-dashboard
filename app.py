@@ -1,12 +1,11 @@
 
 import streamlit as st
-import pandas as pd
-import lightgbm as lgb
-import yfinance as yf
-
 # Must be first Streamlit command
 st.set_page_config(layout="wide")
 st.title("📉 Intraday Breakout Prediction Dashboard")
+import pandas as pd
+import lightgbm as lgb
+import yfinance as yf
 
 # Load model
 model = lgb.Booster(model_file="lightgbm_model.txt")
