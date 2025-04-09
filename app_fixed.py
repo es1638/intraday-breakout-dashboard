@@ -33,7 +33,7 @@ def passes_screening(ticker):
             st.info(f"{ticker}: Missing required historical columns.")
             return False
 
-        avg_volume = hist["Volume"].tail(30).mean()
+        avg_volume = float(hist["Volume"].tail(30).mean())
         if DEBUG:
             st.text(f"{ticker} avg_volume: {avg_volume}")
 
